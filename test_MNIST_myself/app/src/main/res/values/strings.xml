@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">test_MNIST_myself</string>
+    <string name="found_digits">The number is:</string>
+    <string name="not_detected">Couldn\'t find</string>
+</resources>
