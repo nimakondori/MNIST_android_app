@@ -1,9 +1,8 @@
 package com.example.test_mnist_myself;
 
-
 import android.graphics.Bitmap;
-import android.media.ThumbnailUtils;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Menu;
@@ -20,15 +19,16 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.IOException;
 import java.util.List;
 
-
 public class MainActivity extends AppCompatActivity {
-
     private static final int PIXEL_WIDTH =  28;
     private DigitsDetector mnistClassifier;
     private PaintView paintView;
-    Button btn1, btn2;
+    Button btn1, btn2, btn3;
     ImageView mResultImage;
     TextView tV;
+    Thread mThread;
+    Handler mHandler;
+    boolean stopThread;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,14 +37,17 @@ public class MainActivity extends AppCompatActivity {
         tV = findViewById(R.id.tV);
         btn1 = findViewById(R.id.button1);
         btn2 = findViewById(R.id.button2);
+        btn3 = findViewById(R.id.button3);
         paintView = findViewById(R.id.paintView);
         mResultImage = findViewById(R.id.iV);
-
+        stopThread = false;
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);
         paintView.init(metrics);
         loadMnistClassifier();
+        mThread= new Thread(new onDetectclickedThread());
     }
+
     private void loadMnistClassifier() {
         try {
             mnistClassifier = mnistClassifier.classifier(getAssets(), MnistModelConfig.MODEL_FILENAME);
@@ -83,18 +86,26 @@ public class MainActivity extends AppCompatActivity {
     public void doSomething(View v) {
         switch (v.getId()) {
             case R.id.button1:
-                paintView.clear();
+               // mThread.interrupt();
+                stopThread = true;
                 mResultImage.setVisibility(View.GONE);
                 tV.setVisibility(View.GONE);
+                paintView.clear();
+
                 break;
+
             case R.id.button2:
-                onDetectclicked();
+                mThread= new Thread(new onDetectclickedThread());
+                stopThread = false;
+                mThread.start();
                 mResultImage.setVisibility(View.VISIBLE);
                 tV.setVisibility(View.VISIBLE);
+                break;
 
-
-
-
+            case R.id.button3:
+                paintView.clear();
+                //mResultImage.setVisibility(View.GONE);
+                //tV.setVisibility(View.GONE);
                 break;
         }
     }
@@ -106,34 +117,55 @@ public class MainActivity extends AppCompatActivity {
         tV.setVisibility(View.GONE);
     }
 
-    private void onDetectclicked() {
-        Bitmap bitmap = Bitmap.createScaledBitmap(paintView.getBitmap(), PIXEL_WIDTH, PIXEL_WIDTH, false);
-        Bitmap squareBitmap = ThumbnailUtils.extractThumbnail(bitmap, getScreenWidth(), getScreenWidth());
+    private class onDetectclickedThread implements Runnable
+    {
 
-        Bitmap preprocessedImage = ImageUtils.prepareImageForClassification(squareBitmap);
-        mResultImage.setImageBitmap(preprocessedImage);
+        @Override
+        public void run() {
+            Bitmap bitmap = null;
+            Bitmap preprocessedImage = null;
+            List<Classification> recognitions = null;
+            String finalRecognitions;
 
-        List<Classification> recognitions = mnistClassifier.recognizeImage(preprocessedImage);
-        tV.setText(recognitions.toString());
-        Log.d("NKO", "onDetectclicked: "+recognitions.toString());
+            while(!Thread.currentThread().isInterrupted()&& !stopThread) {
+                try
+                {
+                    bitmap = Bitmap.createScaledBitmap(paintView.getBitmap(), PIXEL_WIDTH, PIXEL_WIDTH, false);
+                    // squareBitmap = ThumbnailUtils.extractThumbnail(bitmap, getScreenWidth(), getScreenWidth());
+                    preprocessedImage = ImageUtils.prepareImageForClassification(bitmap);
+                    recognitions = mnistClassifier.recognizeImage(preprocessedImage);
+                    Log.d("NKO", "onDetectclicked: " + recognitions.toString());
+                    finalRecognitions = recognitions.toString();
+//                  ===================================================Are these really necessary??======================================================
+                    Bitmap finalPreprocessedImage = preprocessedImage;
+                    String finalRecognitions1 = finalRecognitions;
+//                  ===================================================Are these really necessary??======================================================
+//                  the run on UI thread requires this copying to temp files to execute. Still not sure why it's needed though??
+
+                    Thread.sleep(30);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                mResultImage.setImageBitmap(finalPreprocessedImage);
+                                tV.setText(finalRecognitions1);
+                            }catch (Exception e){
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                }catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
-
+    // This was supposed to be used for thumbnail utilities which was replaced by scaled bitmap function
+    // Results are quite similar
     private int getScreenWidth() {
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         return displayMetrics.widthPixels;
     }
 }
-//        Bitmap scaledBitmap = Bitmap.createScaledBitmap(paintView.getBitmap(), PIXEL_WIDTH, PIXEL_WIDTH, false);
-//        mResultImage.setImageBitmap(scaledBitmap);
-//
-//
-//        int digit = mnistClassifier.classify(scaledBitmap);
-//        mResultImage.setImageBitmap(scaledBitmap);
-//        if (digit >= 0) {
-//            Log.d("nima", "Found Digit = " + digit);
-//            String result = getString(R.string.found_digits) + digit;
-//            Log.d("Nima", ""+result);
-//        }
-//    }
-//}
